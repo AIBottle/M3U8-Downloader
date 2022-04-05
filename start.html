@@ -131,6 +131,7 @@ Referer: http://www.host.com" v-model="headers"></el-input>
                                     </el-form-item>
                                     <el-form-item label="合并完成" label-position="right">
                                         <el-checkbox v-model="taskIsDelTs" label="删除TS片段"></el-checkbox>
+                                        <el-checkbox v-model="taskTransMP4" label="转换MP4"></el-checkbox>
                                     </el-form-item>
                                 </el-form>
                                 <div slot="footer" class="dialog-footer">
@@ -160,6 +161,7 @@ Referer: http://www.host.com" v-model="headers"></el-input>
                                 </el-form-item>
                                 <el-form-item label="合并完成" label-position="right">
                                     <el-checkbox v-model="taskIsDelTs" label="删除TS片段"></el-checkbox>
+                                    <el-checkbox v-model="taskTransMP4" label="转换MP4"></el-checkbox>
                                 </el-form-item>
                                 <el-form-item>
                                     <el-button class="mybutton" type="primary" @click="clickNewTaskMuti">批量下载</el-button>

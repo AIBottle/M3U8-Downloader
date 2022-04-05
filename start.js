@@ -21,6 +21,7 @@ const _app = new Vue({
             myLocalKeyIV:'',
             taskName:'',
             taskIsDelTs:true,
+            taskTransMP4:false,
             allVideos:[],
             tabPane:'',
             tsMergeType:'speed',
@@ -167,6 +168,7 @@ const _app = new Vue({
                      myKeyIV: this.myKeyIV,
                      taskName: this.taskName,
                      taskIsDelTs:this.taskIsDelTs,
+                     taskTransMP4:this.taskTransMP4,
                      url_prefix:this.m3u8_url_prefix
                 });
 
@@ -193,6 +195,7 @@ const _app = new Vue({
                 ipcRenderer.send('task-add-muti', { m3u8_urls: this.m3u8_urls,
                      headers: this.headers,
                      taskIsDelTs:this.taskIsDelTs,
+                     taskTransMP4:this.taskTransMP4,
                      myKeyIV:'',
                      taskName:''
                 });

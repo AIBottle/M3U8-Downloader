@@ -2,6 +2,7 @@ const os = require('os')
 const { app, BrowserWindow, Tray, ipcMain, shell, Menu, dialog,nativeImage } = require('electron');
 const isDev = require('electron-is-dev');
 const { spawn } = require('child_process');
+const { exec } = require('child_process');
 const path = require('path');
 const { Parser } = require('m3u8-parser');
 const fs = require('fs');
@@ -562,6 +563,8 @@ ipcMain.on('task-add-muti', async function (event, object) {
         myKeyIV: '',
         taskName: '',
         taskIsDelTs: object.taskIsDelTs,
+        taskTransMP4: object.taskTransMP4,
+
         url_prefix: ''
       };
       if (/-{4}/.test(urls)) {
@@ -828,6 +831,7 @@ async function startDownload(object, iidx) {
   let myKeyIV = object.myKeyIV;
   let url = object.url;
   let taskIsDelTs = object.taskIsDelTs;
+  let taskTransMP4 = object.taskTransMP4;
   if (!taskName) {
     taskName = `${id}`;
   }
@@ -888,6 +892,7 @@ async function startDownload(object, iidx) {
     taskName: taskName,
     myKeyIV: myKeyIV,
     taskIsDelTs: taskIsDelTs,
+    taskTransMP4: taskTransMP4,
     success: true,
     videopath: ''
   };
@@ -956,61 +961,75 @@ async function startDownload(object, iidx) {
       logger.error(`[${url}] 下载失败，请检查链接有效性`);
       return;
     }
-    let outPathMP4 = path.join(dir, taskName.replace(/["“”，\.。\|\/\\ \*:;\?<>]/g, "") + '.mp4');
-    let outPathMP4_ = path.join(globalConfigSaveVideoDir, taskName.replace(/["“”，\.。\|\/\\ \*:;\?<>]/g, "") + '.mp4');
-    if (fs.existsSync(ffmpegPath)) {
-      let ffmpegInputStream = new FFmpegStreamReadable(null);
-      new ffmpeg(ffmpegInputStream)
-        .setFfmpegPath(ffmpegPath)
-        .videoCodec('copy')
-        .audioCodec('copy')
-        .format('mp4')
-        .save(outPathMP4)
-        .on('error', (error) => {
-          logger.error(error)
-          video.videopath = "";
-          video.status = "合并出错，请尝试手动合并";
-          mainWindow.webContents.send('task-notify-end', video);
 
-          fs.writeFileSync(globalConfigVideoPath, JSON.stringify(configVideos));
-        })
-        .on('end', function () {
-          logger.info(`${outPathMP4} merge finished.`)
-          video.videopath = "";
-          fs.existsSync(outPathMP4) && (fs.renameSync(outPathMP4, outPathMP4_), video.videopath = outPathMP4_);
-          video.status = "已完成"
-          mainWindow.webContents.send('task-notify-end', video);
-          if (video.taskIsDelTs) {
-            let index_path = path.join(dir, 'index.txt');
-            fs.existsSync(index_path) && fs.unlinkSync(index_path);
-            fileSegments.forEach(item => fs.existsSync(item) && fs.unlinkSync(item));
-            fs.rmdirSync(dir);
+    // 合并所有ts为一个ts
+    let combine_ts = globalConfigSaveVideoDir + '/' + video.taskName + '.ts';
+    let cmd_combine = 'cat ' + video.dir + '/*.ts > ' + combine_ts; 
+
+    exec(cmd_combine, (error, stdout, stderr) => {
+      if(!error && fs.existsSync(combine_ts)) {
+        // 删除合并前的所有文件 参考：https://www.cnblogs.com/cjl-lhj/p/14919367.html
+        cmd_rm = 'find ' + video.dir + '/* | xargs rm';
+        exec(cmd_rm, (error)=>{
+          if (!error) {
+            fs.rmdirSync(video.dir);
           }
-          fs.writeFileSync(globalConfigVideoPath, JSON.stringify(configVideos));
-        })
-        .on('progress', (info) => {
-          logger.info(JSON.stringify(info));
         });
+        
+        if (video.taskTransMP4) {
+          let outPathMP4 = path.join(globalConfigSaveVideoDir, taskName.replace(/["“”，\.。\|\/\\ \*:;\?<>]/g, "") + '.mp4');
+          logger.info(`PPDEBUG: [${outPathMP4}] `);
+          if (fs.existsSync(ffmpegPath)) {
 
-      for (let i = 0; i < fileSegments.length; i++) {
-        let percent = Number.parseInt((i + 1) * 100 / fileSegments.length);
-        video.status = `合并中[${percent}%]`;
+            new ffmpeg(combine_ts)
+              .setFfmpegPath(ffmpegPath)
+              .videoCodec('copy')
+              .audioCodec('copy')
+              .format('mp4')
+              .save(outPathMP4)
+              .on('error', (error) => {
+                logger.error(error)
+                video.videopath = "";
+                video.status = "合并出错，请尝试手动合并";
+                mainWindow.webContents.send('task-notify-end', video);
+
+                fs.writeFileSync(globalConfigVideoPath, JSON.stringify(configVideos));
+              })
+              .on('end', function () {
+                logger.info(`${outPathMP4} merge finished.`)
+                video.videopath = "";
+                fs.existsSync(outPathMP4) && (video.videopath = outPathMP4);
+                video.status = "已完成"
+                mainWindow.webContents.send('task-notify-end', video);
+                if (video.taskIsDelTs) {
+                  fs.unlinkSync(combine_ts);
+                }
+                fs.writeFileSync(globalConfigVideoPath, JSON.stringify(configVideos));
+              })
+              .on('progress', (info) => {
+                logger.info(JSON.stringify(info));
+              });
+            }
+            else {
+              video.videopath = outPathMP4;
+              video.status = "已完成，未发现本地FFMPEG，不进行合成。"
+              mainWindow.webContents.send('task-notify-end', video);
+            }
+          } else {
+            logger.info(`${combine_ts} download success.`)
+            video.videopath = "";
+            fs.existsSync(combine_ts) && (video.videopath = combine_ts);
+            video.status = "已完成"
+            mainWindow.webContents.send('task-notify-end', video);
+          }
+      } else {
+        // 合并后的文件不存在
+        video.status = "合并失败，请检查链接有效性";
         mainWindow.webContents.send('task-notify-end', video);
-        let filePath = fileSegments[i];
-        fs.existsSync(filePath) && ffmpegInputStream.push(fs.readFileSync(filePath));
-        while (ffmpegInputStream._readableState.length > 0) {
-          await sleep(100);
-        }
-        console.log("push " + percent);
+        logger.error(`[${url}] 合并失败`);
+        return;
       }
-      console.log("push(null) end");
-      ffmpegInputStream.push(null);
-    }
-    else {
-      video.videopath = outPathMP4;
-      video.status = "已完成，未发现本地FFMPEG，不进行合成。"
-      mainWindow.webContents.send('task-notify-end', video);
-    }
+    });
   });
 }
 
