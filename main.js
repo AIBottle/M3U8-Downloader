@@ -963,7 +963,7 @@ async function startDownload(object, iidx) {
     }
 
     // 合并所有ts为一个ts
-    let combine_ts = globalConfigSaveVideoDir + '/' + video.taskName + '.ts';
+    let combine_ts = path.join(globalConfigSaveVideoDir, taskName.replace(/["“”，\.。\|\/\\ \*:;\?<>]/g, "") + '.ts');
     let cmd_combine = 'cat ' + video.dir + '/*.ts > ' + combine_ts; 
 
     exec(cmd_combine, (error, stdout, stderr) => {
